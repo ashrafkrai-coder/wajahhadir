@@ -17,7 +17,7 @@ const $ = (id) => document.getElementById(id);
 const defaults = {
   kelas: '',
   sesi: '',
-  scriptUrl: '',
+  scriptUrl: 'https://script.google.com/macros/s/AKfycbyE0KJ2Wkp3iDpT7kJ4cztabUUc125GntD90N7u2SuPWsQJBtyue3CUdhGdlXkhx34K1g/exec',
   token: '',
   threshold: 0.5,
   hits: 3,
