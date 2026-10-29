@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Hadir Wajah</string>
+    <string name="title_activity_main">Hadir Wajah</string>
+    <string name="package_name">my.edu.hadirwajah</string>
+    <string name="custom_url_scheme">my.edu.hadirwajah</string>
+</resources>

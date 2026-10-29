@@ -71,11 +71,19 @@ const saveSettings = () => save(LS.settings, settings);
 const saveStudents = () => save(LS.students, students);
 const saveAtt = () => save(LS.att, attendance);
 
-function activeStudents() {
-  return students;
-}
-
+let scanClassFilter = '';
+let scanNameQuery = '';
 let studentClassFilter = '';
+
+function activeStudents() {
+  if (!scanClassFilter) return [];
+  const query = scanNameQuery.trim().toLocaleLowerCase();
+  return students.filter((student) => {
+    const sameClass = String(student.kelas || '').trim() === scanClassFilter;
+    const sameName = !query || String(student.nama || '').toLocaleLowerCase().includes(query);
+    return sameClass && sameName;
+  });
+}
 
 function studentClasses() {
   return [...new Set(students.map((s) => String(s.kelas || '').trim()).filter(Boolean))]
@@ -90,7 +98,14 @@ function filteredStudents() {
 
 function refreshStudentClassFilters() {
   const classes = studentClasses();
+  const scanFilter = $('scanClassFilter');
   const filter = $('studentClassFilter');
+  if (scanFilter) {
+    scanFilter.innerHTML = '<option value="">Pilih kelas</option>' + classes.map((kelas) =>
+      `<option value="${esc(kelas)}">${esc(kelas)}</option>`).join('');
+    scanFilter.value = classes.includes(scanClassFilter) ? scanClassFilter : '';
+    scanClassFilter = scanFilter.value;
+  }
   const add = $('addStudentClass');
   if (filter) {
     const selected = studentClassFilter;
@@ -281,6 +296,9 @@ function renderAttendance() {
   $('cntAbsent').textContent = current.length - present;
   $('cntTotal').textContent = current.length;
   $('attEmpty').hidden = current.length > 0;
+  $('attEmpty').innerHTML = scanClassFilter
+    ? (scanNameQuery ? 'Tiada murid sepadan dengan carian.' : 'Tiada murid dalam kelas dipilih.')
+    : 'Pilih kelas dahulu untuk memaparkan senarai murid.';
 
   const pct = current.length ? present / current.length : 0;
   $('ringFg').style.strokeDashoffset = String(188.5 * (1 - pct));
@@ -536,6 +554,11 @@ function handleEnrol(results) {
 /* ---------------- Imbas ---------------- */
 async function toggleScan() {
   const btn = $('btnScan');
+  if (!loopActive && !scanClassFilter) {
+    toast('Pilih kelas dahulu sebelum memulakan imbasan.', 'err');
+    $('scanClassFilter').focus();
+    return;
+  }
   if (loopActive) {
     stopLoop();
     btn.textContent = 'Mula Imbas';
@@ -891,6 +914,17 @@ $('btnFlipScan').addEventListener('click', async () => {
 });
 $('btnFlipEnrol').addEventListener('click', () => flipCamera($('vidEnrol'), $('statusEnrol')));
 
+$('scanClassFilter').addEventListener('change', (e) => {
+  scanClassFilter = e.target.value;
+  scanNameQuery = '';
+  $('scanNameSearch').value = '';
+  $('scanNameSearch').disabled = !scanClassFilter;
+  renderAttendance();
+});
+$('scanNameSearch').addEventListener('input', (e) => {
+  scanNameQuery = e.target.value;
+  renderAttendance();
+});
 $('studentClassFilter').addEventListener('change', (e) => {
   studentClassFilter = e.target.value;
   renderStudents();
@@ -1135,6 +1169,8 @@ $('sThrVal').textContent = Number(settings.threshold).toFixed(2);
 $('sHits').value = settings.hits;
 $('sHitsVal').textContent = settings.hits;
 refreshStudentClassFilters();
+$('scanNameSearch').disabled = !scanClassFilter;
+renderAttendance();
 updateNet();
 renderAttendance();
 renderStudents();

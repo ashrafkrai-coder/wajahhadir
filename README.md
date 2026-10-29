@@ -3,12 +3,23 @@
 PWA untuk merekod kehadiran murid melalui pengecaman wajah. Semua pemprosesan AI berlaku pada peranti guru
 (pustaka dan model dihos dalam folder `vendor/`, jadi tiada CDN diperlukan dan ia berfungsi luar talian).
 
-## Jalankan
+## Jalankan sebagai PWA
 
 ```
 python3 -m http.server 8000
 ```
 Buka `http://localhost:8000`. Kamera hanya dibenarkan pada `localhost` atau HTTPS (cth. GitHub Pages).
+
+## Bina fail Android APK
+
+Fail PWA asal dikekalkan dan juga disalin ke folder `www/` untuk pembungkusan Android dengan Capacitor.
+
+```
+npm.cmd run android:debug
+```
+
+APK berjaya dibina boleh ditemui di `dist/Hadir-Wajah.apk` dan `android/app/build/outputs/apk/debug/app-debug.apk`.
+Untuk bina semula projek native selepas menukar fail PWA, jalankan `npm.cmd run android:sync`.
 
 ## Cara guna
 

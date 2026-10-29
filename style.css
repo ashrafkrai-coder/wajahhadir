@@ -134,10 +134,15 @@ small.muted { display: block; font-size: 12.5px; margin: 6px 0 0; }
   content: ""; position: absolute; left: 16px; right: 0; top: 0; height: 0.5px; background: var(--sep);
 }
 .form-label { flex: none; width: 96px; font-weight: 500; }
-.form-row input {
+.form-row input, .form-row select {
   flex: 1; min-width: 0; text-align: right; background: transparent; border: 0; color: var(--text);
   font: inherit; padding: 12px 0; outline: none;
 }
+.form-row select {
+  appearance: auto;
+}
+.form-row input:disabled { opacity: 0.45; }
+.form-row input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
 .form-row input::placeholder { color: var(--text3); }
 .form-row input[type="date"] { color: var(--blue); }
 textarea {
