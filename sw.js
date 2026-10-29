@@ -3,7 +3,7 @@
  * jadi aplikasi berfungsi sepenuhnya luar talian selepas larian pertama.
  * Tukar VERSION apabila anda mengemas kini mana-mana fail.
  */
-const VERSION = 'v1.2.0';
+const VERSION = 'v1.3.0';
 const CACHE = `hadir-wajah-${VERSION}`;
 
 const PRECACHE = [
@@ -11,6 +11,7 @@ const PRECACHE = [
   './index.html',
   './style.css',
   './app.js',
+  './app-core.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',

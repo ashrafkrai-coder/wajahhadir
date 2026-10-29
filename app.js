@@ -3,6 +3,7 @@
  * face-api.js (vladmandic) dihos tempatan. Tiada gambar disimpan.
  * ============================================================ */
 import * as faceapi from './vendor/face-api.esm.js';
+import { csvCell, escapeHtml, isValidBackup, uniqueNames } from './app-core.js';
 
 const MODEL_URL = './vendor/models';
 const LS = { settings: 'hw.settings', students: 'hw.students', att: 'hw.att', admin: 'hw.admin.auth' };
@@ -99,11 +100,18 @@ function refreshStudentClassFilters() {
     studentClassFilter = filter.value;
   }
   if (add) {
-    add.innerHTML = classes.map((kelas) => `<option value="${esc(kelas)}">${esc(kelas)}</option>`).join('');
+    const options = $('studentClassOptions');
+    if (options) options.innerHTML = classes.map((kelas) => `<option value="${esc(kelas)}"></option>`).join('');
   }
 }
 
 async function hashAdminPin(pin, salt) {
+  const saltBytes = Uint8Array.from(salt.match(/.{1,2}/g).map((hex) => parseInt(hex, 16)));
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: saltBytes, iterations: 210000, hash: 'SHA-256' }, key, 256);
+  return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+async function legacyHashAdminPin(pin, salt) {
   const bytes = new TextEncoder().encode(salt + ':' + pin);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -145,14 +153,18 @@ async function loginAdmin() {
       return;
     }
     const salt = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
-    if (!save(LS.admin, { salt, hash: await hashAdminPin(pin, salt) })) return;
+    if (!save(LS.admin, { salt, hash: await hashAdminPin(pin, salt), version: 2 })) return;
   } else {
-    const hash = await hashAdminPin(pin, stored.salt);
-    if (hash !== stored.hash) {
+    let valid = (await hashAdminPin(pin, stored.salt)) === stored.hash;
+    if (!valid && stored.version !== 2) valid = (await legacyHashAdminPin(pin, stored.salt)) === stored.hash;
+    if (!valid) {
       error.textContent = 'PIN tidak betul.';
       error.hidden = false;
       $('adminPin').select();
       return;
+    }
+    if (stored.version !== 2) {
+      save(LS.admin, { salt: stored.salt, hash: await hashAdminPin(pin, stored.salt), version: 2 });
     }
   }
 
@@ -213,7 +225,7 @@ function uid() {
   return 's_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 function esc(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  return escapeHtml(s);
 }
 function avatar(nama) {
   const words = nama.replace(/\b(bin|binti|b\.|bt\.|a\/l|a\/p)\b/gi, ' ').split(/\s+/).filter(Boolean);
@@ -343,9 +355,17 @@ async function openCamera(video) {
   });
   video.srcObject = stream;
   video.classList.toggle('mirror', facingMode === 'user');
-  await new Promise((res) => {
-    if (video.readyState >= 2 && video.videoWidth) return res();
-    video.onloadeddata = () => res();
+  await new Promise((res, reject) => {
+    const timeout = setTimeout(() => reject(new Error('Kamera mengambil masa terlalu lama untuk bersedia.')), 15000);
+    const ready = () => {
+      if (video.readyState >= 2 && video.videoWidth) {
+        clearTimeout(timeout);
+        res();
+      }
+    };
+    video.onloadedmetadata = ready;
+    video.onloadeddata = ready;
+    ready();
   });
   await video.play();
 }
@@ -627,6 +647,11 @@ function takeSample() {
     st.classList.add('error');
     return;
   }
+  if (enrolSamples.some((sample) => faceapi.euclideanDistance(Array.from(r.descriptor), sample) < 0.08)) {
+    st.textContent = 'Sampel terlalu serupa. Tukar sedikit pose, jarak atau ekspresi.';
+    st.classList.add('error');
+    return;
+  }
   enrolSamples.push(Array.from(r.descriptor));
   st.classList.remove('error');
   updateSampleUI();
@@ -663,18 +688,10 @@ function saveEnrol() {
 /* ---------------- Senarai murid ---------------- */
 function addNames(text) {
   const kelas = $('addStudentClass') ? $('addStudentClass').value.trim() : '';
-  const existing = new Set(students.map((s) => s.kelas === kelas ? s.nama.toLowerCase() : null));
-  let added = 0;
-  text
-    .split(/\r?\n/)
-    .map((l) => l.replace(/^\s*\d+[.)\-\s]+/, '').trim())
-    .filter(Boolean)
-    .forEach((nama) => {
-      if (existing.has(nama.toLowerCase())) return;
-      existing.add(nama.toLowerCase());
-      students.push({ id: uid(), nama, kelas, d: [], _f: [] });
-      added++;
-    });
+  const existingNames = students.filter((s) => s.kelas === kelas).map((s) => s.nama);
+  const names = uniqueNames(text, existingNames);
+  names.forEach((nama) => students.push({ id: uid(), nama, kelas, d: [], _f: [] }));
+  const added = names.length;
   saveStudents();
   refreshStudentClassFilters();
   renderStudents();
@@ -751,6 +768,7 @@ function buildRecords() {
   return activeStudents().map((s, i) => {
     const r = rec[s.id];
     return {
+      id: s.id,
       bil: i + 1,
       nama: s.nama,
       kelas: s.kelas || '',
@@ -765,11 +783,7 @@ function exportCsv() {
   if (!activeStudents().length) return toast('Tiada murid untuk dieksport.', 'err');
   const tarikh = $('fDate').value || todayStr();
   const sesi = ($('fSesi').value || '').trim();
-  const csvSafe = (v) => {
-    let text = String(v);
-    if (/^[=+@-]/.test(text)) text = "'" + text;
-    return `"${text.replace(/"/g, '""')}"`;
-  };
+  const csvSafe = csvCell;
   const lines = [['Tarikh', 'Sesi', 'Kelas', 'Bil', 'Nama', 'Status', 'Masa', 'Kaedah'].map(csvSafe).join(',')];
   buildRecords().forEach((r) => {
     lines.push([tarikh, sesi, r.kelas, r.bil, r.nama, r.status, r.masa, r.kaedah].map(csvSafe).join(','));
@@ -792,6 +806,7 @@ async function sendToSheet() {
   btn.disabled = true;
   btn.textContent = 'Menghantar...';
   const payload = {
+    requestId: uid(),
     token: settings.token || '',
     kelas: '',
     tarikh: $('fDate').value || todayStr(),
@@ -799,12 +814,24 @@ async function sendToSheet() {
     rekod: buildRecords()
   };
   try {
-    const res = await fetch(settings.scriptUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    let res;
+    try {
+      res = await fetch(settings.scriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); }
+    catch { throw new Error('Pelayan mengembalikan respons yang tidak sah.'); }
+
     if (!data.ok) throw new Error(data.error || 'Ditolak oleh pelayan');
     toast(`Dihantar: ${data.ditulis} baris dikemas kini`, 'ok');
   } catch (e) {
@@ -954,6 +981,65 @@ bindSetting('sToken', 'token', (v) => v.trim());
 bindSetting('sThr', 'threshold', parseFloat, () => ($('sThrVal').textContent = settings.threshold.toFixed(2)));
 bindSetting('sHits', 'hits', (v) => parseInt(v, 10), () => ($('sHitsVal').textContent = settings.hits));
 
+function exportBackup() {
+  if (!requireAdmin('Log masuk untuk membuat sandaran data.')) return;
+  const backup = {
+    app: 'Hadir Wajah',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    settings,
+    students,
+    attendance
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `hadir-wajah-sandaran-${todayStr()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+async function restoreBackup(file) {
+  if (!requireAdmin('Log masuk untuk memulihkan sandaran.')) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (!isValidBackup(data)) {
+      throw new Error('Format fail sandaran tidak sah.');
+    }
+    if (!confirm('Pulihkan sandaran ini? Data murid dan rekod semasa akan diganti.')) return;
+    settings = { ...defaults, ...(data.settings || {}) };
+    students = data.students;
+    attendance = data.attendance;
+    hydrate();
+    $('fSesi').value = settings.sesi || '';
+    $('sUrl').value = settings.scriptUrl || '';
+    $('sToken').value = settings.token || '';
+    $('sThr').value = settings.threshold;
+    $('sThrVal').textContent = settings.threshold.toFixed(2);
+    $('sHits').value = settings.hits;
+    $('sHitsVal').textContent = settings.hits;
+    save(LS.settings, settings);
+    saveStudents();
+    saveAtt();
+    refreshStudentClassFilters();
+    renderStudents();
+    renderAttendance();
+    toast('Sandaran berjaya dipulihkan.', 'ok');
+  } catch (e) {
+    toast('Gagal memulihkan: ' + e.message, 'err');
+  } finally {
+    $('restoreFile').value = '';
+  }
+}
+
+$('btnBackup').addEventListener('click', exportBackup);
+$('btnRestore').addEventListener('click', () => $('restoreFile').click());
+$('restoreFile').addEventListener('change', (e) => {
+  if (e.target.files && e.target.files[0]) restoreBackup(e.target.files[0]);
+});
+
 $('btnWipeFaces').addEventListener('click', () => {
   if (!requireAdmin('Log masuk untuk memadam data wajah.')) return;
   if (!confirm('Padam data wajah SEMUA murid? Senarai nama dan rekod hadir dikekalkan.')) return;
@@ -1027,6 +1113,9 @@ $('installBtn').addEventListener('click', async () => {
   $('installBtn').hidden = true;
 });
 window.addEventListener('appinstalled', () => ($('installBtn').hidden = true));
+window.addEventListener('swupdateavailable', () => {
+  if (confirm('Versi baharu Hadir Wajah tersedia. Muat semula sekarang?')) location.reload();
+});
 if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !(window.navigator.standalone === true)) $('iosHint').hidden = false;
 
 document.addEventListener('visibilitychange', () => {

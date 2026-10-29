@@ -26,8 +26,8 @@ Buka `http://localhost:8000`. Kamera hanya dibenarkan pada `localhost` atau HTTP
 4. Deploy > New deployment > jenis **Web app** > Execute as: **Me** > Who has access: **Anyone** > Deploy.
 5. Salin URL `/exec` ke Tetapan aplikasi (dan kod rahsia jika ada).
 6. Untuk muat nama murid dari Sheet: buat tab `Senarai` dengan Nama di lajur A (dan Kelas di lajur B, pilihan).
-   Klik **Murid > Dari Sheet** dalam aplikasi. Buka **Tetapan > Nama kelas** jika nama hanya perlu dipadankan untuk satu kelas tertentu; kosongkan nama kelas untuk memuat semua nama.
-   Rekod hadir ditulis ke tab `Kehadiran` (dicipta automatik). Menghantar semula tidak menggandakan baris.
+   Klik **Murid > Dari Sheet** dalam aplikasi. Data senarai boleh mengandungi Nama di lajur A dan Kelas di lajur B. Dalam borang tambah murid, taip terus nama kelas baharu atau pilih daripada cadangan kelas sedia ada.
+   Rekod hadir ditulis ke tab `Kehadiran` (dicipta automatik). ID murid kekal digunakan untuk mengemas kini tanpa bergantung kepada nama semata-mata, dan penghantaran berulang dengan ID permintaan yang sama tidak akan ditulis semula.
 
 Selepas mengubah `Code.gs`, buat **New version** pada deployment yang sama
 (Deploy > Manage deployments > pensil > Version: New version > Deploy). URL `/exec` kekal sama.
@@ -59,7 +59,8 @@ selepas muat semula Sheet) supaya tab dicipta serta-merta, tidak perlu tunggu ha
 - Gambar tidak disimpan. Hanya 128 nombor bagi setiap sampel wajah disimpan dalam `localStorage` peranti.
 - Dapatkan kebenaran sekolah dan penjaga sebelum mendaftarkan wajah murid.
 - Butang **Padam semua data wajah** ada dalam Tetapan.
-- Tiada pengesanan liveness: foto boleh mengelirukan sistem. Guru perlu memerhati.
+- **Sandaran data** dan **Pulihkan sandaran** tersedia dalam Tetapan untuk membuat dan memulihkan fail JSON data tempatan.
+- Tiada pengesanan liveness automatik yang pasti: foto atau rakaman boleh mengelirukan sistem. Pendaftar dan guru perlu memerhati secara manual semasa sampel dan kehadiran dibuat; arahan variasi pose juga digunakan semasa pendaftaran.
 - Kunci peranti guru dengan kata laluan kerana data wajah (walaupun bukan gambar) masih data biometrik.
 
 ## Penalaan

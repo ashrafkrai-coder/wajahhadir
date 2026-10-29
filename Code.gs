@@ -19,7 +19,7 @@ const SHEET_SENARAI = 'Senarai';
 const SHEET_LOG = 'Log';
 const PREFIX_JADUAL = 'Jadual';
 
-const HEADERS = ['Tarikh', 'Sesi', 'Kelas', 'Bil', 'Nama', 'Status', 'Masa', 'Kaedah', 'Dikemas kini'];
+const HEADERS = ['Tarikh', 'Sesi', 'Kelas', 'Bil', 'Nama', 'Status', 'Masa', 'Kaedah', 'Dikemas kini', 'ID Murid'];
 const LOG_HEADERS = ['Masa', 'Jenis', 'Tarikh', 'Sesi', 'Kelas', 'Nama', 'Sebelum', 'Selepas', 'Kaedah', 'Catatan'];
 const HARI = ['Ahd', 'Isn', 'Sel', 'Rab', 'Kha', 'Jum', 'Sab'];
 const HADIR = '✓';
@@ -72,6 +72,8 @@ function getRekodSheet_() {
     // Tarikh, Sesi, Kelas dan Masa sebagai teks supaya tidak ditukar format oleh Sheets
     sh.getRange('A:C').setNumberFormat('@');
     sh.getRange('G:G').setNumberFormat('@');
+  } else if (sh.getLastColumn() < HEADERS.length) {
+    sh.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
   }
   return sh;
 }
@@ -263,6 +265,12 @@ function doPost(e) {
     const d = JSON.parse(e.postData.contents);
     semakToken_(d.token);
 
+    const requestId = String(d.requestId || '').slice(0, 80);
+    if (requestId) {
+      const cache = CacheService.getScriptCache();
+      if (cache.get('req:' + requestId)) return jsonOut_({ ok: true, ditulis: 0, baharu: 0, dikemas: 0, perubahan: 0, duplikasi: true });
+    }
+
     if (d.action === 'murid') {
       const sh = getSS_().getSheetByName(SHEET_SENARAI);
       if (!sh) throw new Error('Tab "' + SHEET_SENARAI + '" tidak dijumpai. Jalankan fungsi sediakan() dahulu.');
@@ -277,6 +285,7 @@ function doPost(e) {
     const sesi = String(d.sesi || '');
     const rekod = d.rekod || [];
     if (!/^\d{4}-\d{2}-\d{2}$/.test(tarikh)) throw new Error('Tarikh tidak sah');
+    if (sesi.length > 60) throw new Error('Sesi terlalu panjang');
     if (!Array.isArray(rekod) || rekod.length > 5000) throw new Error('Senarai rekod tidak sah');
 
     const sh = getRekodSheet_();
@@ -285,7 +294,8 @@ function doPost(e) {
 
     const peta = {};
     data.forEach(function (r, i) {
-      peta[[String(r[0]), String(r[1]), String(r[2]), String(r[4])].join('|')] = i;
+      const key = JSON.stringify([String(r[0]), String(r[1]), String(r[2]), String(r[9] || r[4])]);
+      peta[key] = i;
     });
 
     const sekarang = nowStr_();
@@ -296,15 +306,18 @@ function doPost(e) {
     let hadir = 0;
 
     rekod.forEach(function (r) {
-      const kelas = String(r.kelas || d.kelas || '').trim();
-      if (r.status === 'Hadir') hadir++;
       if (!r || !['Hadir', 'Tidak Hadir'].includes(r.status) || typeof r.nama !== 'string' || !r.nama.trim()) throw new Error('Rekod murid tidak sah');
+      if (String(r.nama).length > 200 || String(r.kelas || '').length > 60 || String(r.kaedah || '').length > 30) throw new Error('Data rekod terlalu panjang');
+      const kelas = String(r.kelas || d.kelas || '').trim();
+      const muridId = String(r.id || r.nama.trim()).slice(0, 80);
+      if (r.status === 'Hadir') hadir++;
       const bil = Number(r.bil);
-      if (!Number.isInteger(bil) || bil < 1) throw new Error('Nombor murid tidak sah');
-      const baris = [tarikh, selamatSheet_(sesi), selamatSheet_(kelas), bil, selamatSheet_(r.nama.trim()), r.status, selamatSheet_(r.masa), selamatSheet_(r.kaedah), sekarang];
-      const kunci = [tarikh, sesi, kelas, String(r.nama.trim())].join('|');
-      if (kunci in peta) {
-        const idx = peta[kunci];
+      if (!Number.isInteger(bil) || bil < 1 || bil > 5000) throw new Error('Nombor murid tidak sah');
+      const baris = [tarikh, selamatSheet_(sesi), selamatSheet_(kelas), bil, selamatSheet_(r.nama.trim()), r.status, selamatSheet_(r.masa), selamatSheet_(r.kaedah), sekarang, selamatSheet_(muridId)];
+      const kunci = JSON.stringify([tarikh, sesi, kelas, muridId]);
+      const kunciLama = JSON.stringify([tarikh, sesi, kelas, String(r.nama.trim())]);
+      if (kunci in peta || kunciLama in peta) {
+        const idx = (kunci in peta) ? peta[kunci] : peta[kunciLama];
         const lama = String(data[idx][5]);
         sh.getRange(idx + 2, 1, 1, HEADERS.length).setValues([baris]);
         kemas++;
@@ -336,6 +349,7 @@ function doPost(e) {
     rekod.forEach(function (r) { if (r.kelas) kelasSet[String(r.kelas)] = true; });
     Object.keys(kelasSet).forEach(binaJadual_);
 
+    if (requestId) CacheService.getScriptCache().put('req:' + requestId, '1', 21600);
     return jsonOut_({
       ok: true,
       ditulis: kemas + baru.length,

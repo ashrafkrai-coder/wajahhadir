@@ -98,7 +98,8 @@
             <p class="muted">Pilih kelas dan tampal senarai nama, satu nama sebaris.</p>
             <label class="form-row">
               <span class="form-label">Kelas</span>
-              <select id="addStudentClass" aria-label="Kelas murid baharu"></select>
+              <input id="addStudentClass" list="studentClassOptions" placeholder="Taip atau pilih kelas" maxlength="60" aria-label="Kelas murid baharu" />
+              <datalist id="studentClassOptions"></datalist>
             </label>
             <textarea id="namesInput" rows="5" placeholder="Ali bin Abu&#10;Siti binti Ahmad&#10;..."></textarea>
             <div class="controls tight">
@@ -196,6 +197,9 @@
           </ul>
         </div>
         <div class="group">
+          <button id="btnBackup" class="action-row">Sandaran data</button>
+          <button id="btnRestore" class="action-row">Pulihkan sandaran</button>
+          <input id="restoreFile" type="file" accept="application/json,.json" hidden />
           <button id="btnWipeFaces" class="action-row danger">Padam semua data wajah</button>
           <button id="btnWipeAll" class="action-row danger">Padam semua data</button>
         </div>
@@ -267,7 +271,17 @@
       window.addEventListener('load', () => {
         navigator.serviceWorker
           .register('./sw.js')
-          .then((reg) => console.log('[PWA] Service Worker didaftarkan:', reg.scope))
+          .then((reg) => {
+            console.log('[PWA] Service Worker didaftarkan:', reg.scope);
+            reg.addEventListener('updatefound', () => {
+              const worker = reg.installing;
+              worker?.addEventListener('statechange', () => {
+                if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                  window.dispatchEvent(new Event('swupdateavailable'));
+                }
+              });
+            });
+          })
           .catch((err) => console.warn('[PWA] Pendaftaran SW gagal:', err));
       });
     }
