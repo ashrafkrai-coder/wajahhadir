@@ -3,7 +3,7 @@
  * jadi aplikasi berfungsi sepenuhnya luar talian selepas larian pertama.
  * Tukar VERSION apabila anda mengemas kini mana-mana fail.
  */
-const VERSION = 'v1.4.0';
+const VERSION = 'v1.4.1';
 const CACHE = `hadir-wajah-${VERSION}`;
 
 const PRECACHE = [
@@ -58,8 +58,9 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(cacheFirst(req));
     return;
   }
-  // Selebihnya: stale-while-revalidate (navigasi jatuh balik ke index.html)
-  event.respondWith(staleWhileRevalidate(req));
+  // Navigasi dan aset aplikasi utama sentiasa cuba versi terkini dahulu.
+  // Model/ikon kekal cache-first supaya saiz muat turun kekal kecil.
+  event.respondWith(networkFirst(req));
 });
 
 async function cacheFirst(req) {
@@ -70,18 +71,20 @@ async function cacheFirst(req) {
   return res;
 }
 
-async function staleWhileRevalidate(req) {
+async function networkFirst(req) {
   const cache = await caches.open(CACHE);
-  const cached = await cache.match(req, { ignoreSearch: true });
-  const net = fetch(req)
-    .then((res) => {
-      if (res && res.ok) cache.put(req, res.clone());
+  try {
+    const res = await fetch(req);
+    if (res && res.ok) {
+      await cache.put(req, res.clone());
       return res;
-    })
-    .catch(() => null);
+    }
+  } catch (error) {
+    console.warn('[PWA] Rangkaian gagal, gunakan cache:', req.url, error);
+  }
+
+  const cached = await cache.match(req, { ignoreSearch: true });
   if (cached) return cached;
-  const res = await net;
-  if (res) return res;
   if (req.mode === 'navigate') {
     const fallback = await cache.match('./index.html');
     if (fallback) return fallback;
