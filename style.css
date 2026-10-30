@@ -108,6 +108,32 @@ html, body {
 .large-title { margin: 6px 4px 14px; font-size: 34px; line-height: 1.1; font-weight: 700; letter-spacing: -0.03em; }
 .large-title.small { font-size: 28px; }
 .enrol-name { margin: 0 4px 4px; font-size: 20px; font-weight: 600; }
+.enrol-countdown {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 8;
+  color: #fff;
+  font-size: clamp(64px, 22vw, 140px);
+  font-weight: 800;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, .85);
+  pointer-events: none;
+}
+.enrol-countdown[hidden] { display: none; }
+.capture-flash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  background: rgba(255, 255, 255, .88);
+  animation: capture-flash .32s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes capture-flash {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
 
 .section-label {
   margin: 22px 16px 8px; font-size: 13px; font-weight: 500; text-transform: uppercase;

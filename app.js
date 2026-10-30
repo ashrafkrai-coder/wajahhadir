@@ -45,6 +45,8 @@ let lastResults = [];
 let hitCounter = {};
 let enrolStudent = null;
 let enrolSamples = [];
+let autoEnrolTimer = 0;
+let autoEnrolRunning = false;
 let frames = 0;
 let fpsLast = performance.now();
 let toastTimer = 0;
@@ -654,37 +656,99 @@ async function startEnrol(id) {
 
 function updateSampleUI() {
   $('btnSample').textContent = `Ambil sampel (${enrolSamples.length})`;
+  $('btnAutoEnrol').textContent = autoEnrolRunning ? 'Berhenti Auto' : 'Auto Daftar (5 sampel)';
   $('btnEnrolSave').disabled = enrolSamples.length < MIN_SAMPLES;
-  $('btnSample').disabled = enrolSamples.length >= MAX_SAMPLES;
+  $('btnSample').disabled = enrolSamples.length >= MAX_SAMPLES || autoEnrolRunning;
+  $('btnAutoEnrol').disabled = enrolSamples.length >= MAX_SAMPLES && !autoEnrolRunning;
 }
 
-function takeSample() {
+function setEnrolCountdown(value) {
+  const overlay = $('enrolCountdown');
+  if (!overlay) return;
+  overlay.hidden = !value;
+  overlay.textContent = value || '';
+}
+
+function stopAutoEnrol() {
+  autoEnrolRunning = false;
+  setEnrolCountdown(null);
+  updateSampleUI();
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => { autoEnrolTimer = setTimeout(resolve, ms); });
+}
+
+async function startAutoEnrol() {
+  if (autoEnrolRunning) {
+    stopAutoEnrol();
+    $('statusEnrol').textContent = 'Tangkap automatik dihentikan.';
+    return;
+  }
+  if (!enrolStudent || !active) return;
+
+  enrolSamples = [];
+  updateSampleUI();
+  autoEnrolRunning = true;
+  updateSampleUI();
+  $('statusEnrol').classList.remove('error');
+
+  for (let count = 3; count > 0 && autoEnrolRunning; count--) {
+    setEnrolCountdown(count);
+    await sleep(700);
+  }
+
+  setEnrolCountdown(null);
+  const target = 5;
+  while (autoEnrolRunning && enrolSamples.length < target) {
+    setEnrolCountdown('SNAP');
+    const captured = takeSample(true);
+    if (captured) {
+      $('stageEnrol').classList.remove('capture-flash');
+      void $('stageEnrol').offsetWidth;
+      $('stageEnrol').classList.add('capture-flash');
+      setTimeout(() => $('stageEnrol').classList.remove('capture-flash'), 350);
+    }
+    await sleep(captured ? 850 : 400);
+    setEnrolCountdown(null);
+  }
+
+  if (autoEnrolRunning && enrolSamples.length >= target) {
+    stopAutoEnrol();
+    $('statusEnrol').textContent = `${target} sampel berjaya ditangkap. Menyimpan wajah...`;
+    saveEnrol();
+  }
+}
+
+function takeSample(auto = false) {
   const st = $('statusEnrol');
   if (lastResults.length !== 1) {
     st.textContent = lastResults.length === 0 ? 'Tiada wajah dikesan.' : 'Pastikan hanya seorang dalam bingkai.';
     st.classList.add('error');
-    return;
+    return false;
   }
   const r = lastResults[0];
   const vw = active.video.videoWidth;
   if (r.detection.score < 0.6 || r.detection.box.width < vw * 0.15) {
     st.textContent = 'Wajah terlalu kecil atau kurang jelas. Dekatkan sedikit.';
     st.classList.add('error');
-    return;
+    return false;
   }
   if (enrolSamples.some((sample) => faceapi.euclideanDistance(Array.from(r.descriptor), sample) < 0.08)) {
     st.textContent = 'Sampel terlalu serupa. Tukar sedikit pose, jarak atau ekspresi.';
     st.classList.add('error');
-    return;
+    return false;
   }
   enrolSamples.push(Array.from(r.descriptor));
   st.classList.remove('error');
   updateSampleUI();
   beep();
-  toast(`Sampel ${enrolSamples.length} diambil`, 'ok');
+  toast(`Sampel ${enrolSamples.length} diambil`, auto ? '' : 'ok');
+  return true;
 }
 
 function finishEnrol() {
+  stopAutoEnrol();
   stopLoop();
   active = null;
   enrolStudent = null;
@@ -992,9 +1056,11 @@ $('stuList').addEventListener('click', (e) => {
   }
 });
 
-$('btnSample').addEventListener('click', takeSample);
+$('btnSample').addEventListener('click', () => takeSample(false));
+$('btnAutoEnrol').addEventListener('click', startAutoEnrol);
 $('btnEnrolSave').addEventListener('click', saveEnrol);
 $('btnEnrolReset').addEventListener('click', () => {
+  stopAutoEnrol();
   enrolSamples = [];
   updateSampleUI();
 });
