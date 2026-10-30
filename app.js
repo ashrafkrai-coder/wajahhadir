@@ -80,10 +80,9 @@ let scanNameQuery = '';
 let studentClassFilter = '';
 
 function activeStudents() {
-  if (!scanClassFilter) return [];
   const query = scanNameQuery.trim().toLocaleLowerCase();
   return students.filter((student) => {
-    const sameClass = String(student.kelas || '').trim() === scanClassFilter;
+    const sameClass = !scanClassFilter || String(student.kelas || '').trim() === scanClassFilter;
     const sameName = !query || String(student.nama || '').toLocaleLowerCase().includes(query);
     return sameClass && sameName;
   });
@@ -105,7 +104,7 @@ function refreshStudentClassFilters() {
   const scanFilter = $('scanClassFilter');
   const filter = $('studentClassFilter');
   if (scanFilter) {
-    scanFilter.innerHTML = '<option value="">Pilih kelas</option>' + classes.map((kelas) =>
+    scanFilter.innerHTML = '<option value="">Semua kelas</option>' + classes.map((kelas) =>
       `<option value="${esc(kelas)}">${esc(kelas)}</option>`).join('');
     scanFilter.value = classes.includes(scanClassFilter) ? scanClassFilter : '';
     scanClassFilter = scanFilter.value;
@@ -299,23 +298,24 @@ function renderAttendance() {
   $('cntPresent').textContent = present;
   $('cntAbsent').textContent = current.length - present;
   $('cntTotal').textContent = current.length;
-  $('attEmpty').hidden = current.length > 0;
+  const scannedStudents = current.filter((s) => rec[s.id]);
+  $('attEmpty').hidden = scannedStudents.length > 0;
   $('attEmpty').innerHTML = scanClassFilter
-    ? (scanNameQuery ? 'Tiada murid sepadan dengan carian.' : 'Tiada murid dalam kelas dipilih.')
-    : 'Pilih kelas dahulu untuk memaparkan senarai murid.';
+    ? (scanNameQuery ? 'Tiada murid hadir sepadan dengan carian.' : 'Tiada murid hadir dalam kelas dipilih.')
+    : (scanNameQuery ? 'Tiada murid hadir sepadan dengan carian.' : 'Belum ada murid yang berjaya diimbas.');
 
   const pct = current.length ? present / current.length : 0;
   $('ringFg').style.strokeDashoffset = String(188.5 * (1 - pct));
   $('ringPct').textContent = `${Math.round(pct * 100)}%`;
 
-  list.innerHTML = activeStudents()
+  list.innerHTML = scannedStudents
     .map((s) => {
       const r = rec[s.id];
-      return `<li class="row ${r ? 'present' : ''}">
+      return `<li class="row present">
         ${avatar(s.nama)}
-        <span class="name">${esc(s.nama)}<span class="meta">${r ? `${r.masa} · ${r.kaedah}` : 'Belum hadir'}</span></span>
-        <span class="tag">${r ? '✓ Hadir' : ''}</span>
-        ${isAdmin ? `<span class="actions"><button class="btn btn-tiny" data-act="toggle" data-id="${s.id}">${r ? 'Batal' : 'Tanda'}</button></span>` : ''}
+        <span class="name">${esc(s.nama)}<span class="meta">${r.masa} · ${r.kaedah}</span></span>
+        <span class="tag">✓ Hadir</span>
+        ${isAdmin ? `<span class="actions"><button class="btn btn-tiny" data-act="toggle" data-id="${s.id}">Batal</button></span>` : ''}
       </li>`;
     })
     .join('');
@@ -558,11 +558,6 @@ function handleEnrol(results) {
 /* ---------------- Imbas ---------------- */
 async function toggleScan() {
   const btn = $('btnScan');
-  if (!loopActive && !scanClassFilter) {
-    toast('Pilih kelas dahulu sebelum memulakan imbasan.', 'err');
-    $('scanClassFilter').focus();
-    return;
-  }
   if (loopActive) {
     stopLoop();
     btn.textContent = 'Mula Imbas';
@@ -984,7 +979,6 @@ $('scanClassFilter').addEventListener('change', (e) => {
   scanClassFilter = e.target.value;
   scanNameQuery = '';
   $('scanNameSearch').value = '';
-  $('scanNameSearch').disabled = !scanClassFilter;
   renderAttendance();
 });
 $('scanNameSearch').addEventListener('input', (e) => {
@@ -1237,7 +1231,6 @@ $('sThrVal').textContent = Number(settings.threshold).toFixed(2);
 $('sHits').value = settings.hits;
 $('sHitsVal').textContent = settings.hits;
 refreshStudentClassFilters();
-$('scanNameSearch').disabled = !scanClassFilter;
 renderAttendance();
 updateNet();
 renderAttendance();
