@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node --check app.js && node --check sw.js && node --check app-core.js",
+    "build:vercel": "npm run build && node scripts/prepare-vercel.js",
     "test": "node --test"
   }
 }
