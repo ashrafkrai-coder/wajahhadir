@@ -1,9 +1,0 @@
-{
-  "appId": "my.edu.hadirwajah",
-  "appName": "Hadir Wajah",
-  "webDir": "www",
-  "bundledWebRuntime": false,
-  "server": {
-    "androidScheme": "https"
-  }
-}

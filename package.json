@@ -3,15 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node --check app.js && node --check sw.js && node --check app-core.js && node scripts/prepare-web.js",
-    "test": "node --test",
-    "android:sync": "npm run build && npx.cmd cap sync android",
-    "android:debug": "npm run android:sync && cd android && gradlew.bat assembleDebug",
-    "android:release": "npm run android:sync && cd android && gradlew.bat assembleRelease"
-  },
-  "dependencies": {
-    "@capacitor/android": "^8.6.0",
-    "@capacitor/cli": "^8.6.0",
-    "@capacitor/core": "^8.6.0"
+    "build": "node --check app.js && node --check sw.js && node --check app-core.js",
+    "test": "node --test"
   }
 }
