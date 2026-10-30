@@ -24,6 +24,8 @@ const defaults = {
   consent: false
 };
 let settings = { ...defaults, ...load(LS.settings, {}) };
+// Tetapan lama yang disimpan tanpa URL tidak boleh mengatasi URL lalai aplikasi.
+if (!String(settings.scriptUrl || '').trim()) settings.scriptUrl = defaults.scriptUrl;
 settings.threshold = Number(settings.threshold);
 settings.hits = parseInt(settings.hits, 10);
 if (!Number.isFinite(settings.threshold) || settings.threshold < 0.35 || settings.threshold > 0.60) settings.threshold = defaults.threshold;
